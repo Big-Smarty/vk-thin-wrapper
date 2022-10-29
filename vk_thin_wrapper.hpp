@@ -67,7 +67,7 @@ using destroy_fn =
  *parent is present
  * @arg create_info VkCreateInfo struct of object to be created
  **/
-template <typename T, typename CreateInfo, typename ParentType,
+template <typename T, typename CreateInfo, typename ParentType = no_parent_t,
           create_fn<T, CreateInfo, ParentType> CreateFn,
           destroy_fn<T, ParentType> DestroyFn>
 class thin_wrapper {
