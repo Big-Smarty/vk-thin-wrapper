@@ -120,7 +120,6 @@ public:
   }
   thin_wrapper(const thin_wrapper &) = delete;
   thin_wrapper(thin_wrapper &&other) noexcept = delete;
-  thin_wrapper(thin_wrapper &&other) noexcept = delete;
   thin_wrapper &operator=(const thin_wrapper &) = delete;
   thin_wrapper &operator=(thin_wrapper &&) = delete;
   ~thin_wrapper()
