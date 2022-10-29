@@ -6,6 +6,30 @@
 #include <type_traits>
 #include <volk.h>
 
+#define VK_CHECK(x)                                                            \
+  auto result = x;                                                             \
+  if (result == VK_SUCCESS) {                                                  \
+    spdlog::trace("{0} returned {1}", #x, result);                             \
+  } else {                                                                     \
+    spdlog::error("{0} returned {1}", #x, result);                             \
+    exit(result);                                                              \
+  }
+
+#define VK_CHECK_TWC(x, o)                                                     \
+  auto result = x;                                                             \
+  if (result == VK_SUCCESS) {                                                  \
+    spdlog::trace("{0}\n\
+      object type: {1}\n\
+      return code: {2}",                                                       \
+                  #x, o, result);                                              \
+  } else {                                                                     \
+    spdlog::error("{0}\n\
+      object type: {1}\n\
+      return code: {2}",                                                       \
+                  #x, o, result);                                              \
+    exit(result);                                                              \
+  }
+
 /**
  * Dummy struct for when no parent is present (mostly for the case of
  * VkInstance)
@@ -67,7 +91,7 @@ using destroy_fn =
  *parent is present
  * @arg create_info VkCreateInfo struct of object to be created
  **/
-template <typename T, typename CreateInfo, typename ParentType ,
+template <typename T, typename CreateInfo, typename ParentType,
           create_fn<T, CreateInfo, ParentType> CreateFn,
           destroy_fn<T, ParentType> DestroyFn>
 class thin_wrapper {
@@ -79,22 +103,7 @@ public:
   thin_wrapper(const CreateInfo &create_info)
     requires std::is_same_v<ParentType, no_parent_t>
   {
-    try {
-      auto result = CreateFn(&create_info, nullptr, &m_object);
-      if (result != VK_SUCCESS) {
-        throw std::runtime_error(
-            std::string("There was an error during VK object initialization! "
-                        "Return Code: ") +
-            std::to_string(result) + std::string(" in file ") + __FILE__ +
-            std::string(" on line ") + std::to_string(__LINE__));
-      }
-    } catch (std::exception &_exception) {
-      spdlog::error("There was an exception: {0}", _exception.what());
-      exit(-1);
-    } catch (std::runtime_error &_runtime_error) {
-      spdlog::error("There was a runtime error: {0}", _runtime_error.what());
-      exit(-1);
-    }
+    VK_CHECK_TWC(CreateFn(&create_info, nullptr, &m_object), typeid(T).name());
   }
 
   /**
@@ -106,31 +115,12 @@ public:
   thin_wrapper(const CreateInfo &create_info, const ParentType &parent)
     requires(!std::is_same_v<ParentType, no_parent_t>)
       : m_parent(parent) {
-    try {
-      auto result = CreateFn(parent, &create_info, nullptr, &m_object);
-      if (result != VK_SUCCESS) {
-        throw std::runtime_error(
-            std::string("There was an error during VK object initialization! "
-                        "Return Code: ") +
-            std::to_string(result) + std::string(" in file ") + __FILE__ +
-            std::string(" on line ") + std::to_string(__LINE__));
-      }
-    } catch (std::exception &_exception) {
-      spdlog::error("There was an exception: {0}", _exception.what());
-      exit(-1);
-    } catch (std::runtime_error &_runtime_error) {
-      spdlog::error("There was a runtime error: {0}", _runtime_error.what());
-      exit(-1);
-    }
+    VK_CHECK_TWC(CreateFn(parent, &create_info, nullptr, &m_object),
+                 typeid(T).name());
   }
   thin_wrapper(const thin_wrapper &) = delete;
-  thin_wrapper(thin_wrapper &&other) noexcept
-    requires(std::is_same_v<ParentType, no_parent_t>)
-      : m_object(std::exchange(other.m_object, nullptr)) {}
-  thin_wrapper(thin_wrapper &&other) noexcept
-    requires(!std::is_same_v<ParentType, no_parent_t>)
-      : m_object(std::exchange(other.m_object, nullptr)),
-        m_parent(std::exchange(other.m_parent, nullptr)) {}
+  thin_wrapper(thin_wrapper &&other) noexcept = delete;
+  thin_wrapper(thin_wrapper &&other) noexcept = delete;
   thin_wrapper &operator=(const thin_wrapper &) = delete;
   thin_wrapper &operator=(thin_wrapper &&) = delete;
   ~thin_wrapper()
