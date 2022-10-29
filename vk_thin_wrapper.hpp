@@ -12,7 +12,7 @@
     spdlog::trace("{0} returned {1}", #x, result);                             \
   } else {                                                                     \
     spdlog::error("{0} returned {1}", #x, result);                             \
-    exit(result);                                                              \
+    return result;                                                              \
   }
 
 #define VK_CHECK_TWC(x, o)                                                     \
@@ -27,7 +27,7 @@
       object type: {1}\n\
       return code: {2}",                                                       \
                   #x, o, result);                                              \
-    exit(result);                                                              \
+    return result;                                                              \
   }
 
 /**
