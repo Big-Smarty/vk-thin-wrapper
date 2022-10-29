@@ -6,14 +6,16 @@
 #include <stdexcept>
 #include <type_traits>
 
-#define VK_NO_PROTOTYPES
-#include <vulkan/vulkan_core.h>
+#include <volk.h>
 
 struct no_parent_t {};
 
 VkResult vkCreateSurfaceDummy(VkInstance, const no_parent_t *,
                               const VkAllocationCallbacks *, VkSurfaceKHR *);
 namespace bs::thin_wrappers {
+template <auto *FnPtr, typename T> T vkTrampFn(auto... args) {
+  return (*FnPtr)(args...);
+}
 template <typename T, typename CreateInfo, typename ParentType>
 using create_fn =
     std::conditional_t<std::is_same_v<ParentType, no_parent_t>,
