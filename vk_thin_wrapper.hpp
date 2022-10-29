@@ -1,11 +1,9 @@
 #pragma once
 
-#include <functional>
 #include <optional>
 #include <spdlog/spdlog.h>
 #include <stdexcept>
 #include <type_traits>
-
 #include <volk.h>
 
 struct no_parent_t {};
@@ -85,12 +83,14 @@ public:
   thin_wrapper &operator=(const thin_wrapper &) = delete;
   thin_wrapper &operator=(thin_wrapper &&) = delete;
   ~thin_wrapper()
-    requires std::is_same_v<ParentType, no_parent_t>
+    requires(std::is_same_v<ParentType, no_parent_t> ||
+             std::is_same_v<T, VkDevice>)
   {
     DestroyFn(m_object, nullptr);
   }
   ~thin_wrapper()
-    requires(!std::is_same_v<ParentType, no_parent_t>)
+    requires(!(std::is_same_v<ParentType, no_parent_t> ||
+               std::is_same_v<T, VkDevice>))
   {
     DestroyFn(m_parent, m_object, nullptr);
   }
@@ -100,6 +100,6 @@ public:
 
 protected:
   T m_object{nullptr};
-  [[no_unique_address]] ParentType m_parent{nullptr};
+  [[no_unique_address]] ParentType m_parent;
 };
 } // namespace bs::thin_wrappers
