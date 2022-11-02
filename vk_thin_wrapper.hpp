@@ -81,6 +81,9 @@ using destroy_fn =
                        void (*)(T, const VkAllocationCallbacks *),
                        void (*)(ParentType, T, const VkAllocationCallbacks *)>;
 
+template <typename T, typename CreateInfo, typename ParentType>
+using get_fn = void (*)(ParentType, CreateInfo *, T *);
+
 /**
  * The actual thin wrapper. RAII wrapper around the C-style vulkan objects.
  * @tparam T typename of object to be wrapped
@@ -90,7 +93,10 @@ using destroy_fn =
  * @arg create_info VkCreateInfo struct of object to be created
  **/
 template <typename T, typename CreateInfo, typename ParentType,
-          create_fn<T, CreateInfo, ParentType> CreateFn,
+          std::conditional_t<!std::is_same_v<T, VkQueue>,
+                             create_fn<T, CreateInfo, ParentType>,
+                             get_fn<T, CreateInfo, ParentType>>
+              CreateFn,
           destroy_fn<T, ParentType> DestroyFn>
 class thin_wrapper {
 public:
@@ -98,39 +104,77 @@ public:
    * Constructor for the thin wrapper object if no parent is present
    * @arg create_info VkCreateInfoStruct for object to be created
    **/
-  thin_wrapper(const CreateInfo &create_info)
-    requires std::is_same_v<ParentType, no_parent_t>
+  thin_wrapper(CreateInfo &create_info)
+    requires(std::is_same_v<ParentType, no_parent_t> &&
+             std::is_same_v<create_fn<T, CreateInfo, ParentType>,
+                            decltype(CreateFn)>)
   {
     VK_CHECK_TWC(CreateFn(&create_info, nullptr, &m_object), typeid(T).name());
   }
 
   /**
    * Constructor for the thin wrapper object if a parent is present
-   * @arg create_info VkCreateInfoStruct for object to be created
+   * @arg create_info VkCreateInfo struct for object to be created
    * @arg parent parent of the object; The handle will be copied for later
    *destruction
    **/
-  thin_wrapper(const CreateInfo &create_info, const ParentType &parent)
-    requires(!std::is_same_v<ParentType, no_parent_t>)
+  thin_wrapper(CreateInfo &create_info, ParentType &parent)
+    requires(!std::is_same_v<ParentType, no_parent_t> &&
+             std::is_same_v<create_fn<T, CreateInfo, ParentType>,
+                            decltype(CreateFn)>)
       : m_parent(parent) {
     VK_CHECK_TWC(CreateFn(parent, &create_info, nullptr, &m_object),
                  typeid(T).name());
   }
+
+  /**
+   * Constructor for the thin wrapper object if the object is "created" via a
+   *getter function (like vkGetDeviceQueue2)
+   * @arg create_info VkCreateInfo struct for object to be created
+   * @arg parent parent of the object; The handle will be copied for later
+   *destruction
+   **/
+  thin_wrapper(CreateInfo &create_info, ParentType &parent)
+    requires(
+        std::is_same_v<get_fn<T, CreateInfo, ParentType>, decltype(CreateFn)>)
+      : m_parent(parent) {
+    CreateFn(parent, &create_info, &m_object);
+  }
+
+  /**
+   * Constructor for the thin wrapper object if its a standalone thats queried
+   *or enumerated (e.g. VkPhysicalDevice)
+   **/
+  thin_wrapper(T &object) : m_object(object) {}
+
   thin_wrapper(const thin_wrapper &) = delete;
   thin_wrapper(thin_wrapper &&other) noexcept = delete;
   thin_wrapper &operator=(const thin_wrapper &) = delete;
   thin_wrapper &operator=(thin_wrapper &&) = delete;
+
+  /**
+   * Default thin wrapper in case DestroyFn is nullptr (for cases where no
+   *explicit destruction is needed)
+   **/
+  ~thin_wrapper() = default;
+
+  /**
+   * Destructor for objects with VkDevice as a parent
+   **/
   ~thin_wrapper()
-    requires(std::is_same_v<ParentType, no_parent_t> ||
-             std::is_same_v<T, VkDevice>)
-  {
-    DestroyFn(m_object, nullptr);
-  }
-  ~thin_wrapper()
-    requires(!(std::is_same_v<ParentType, no_parent_t> ||
-               std::is_same_v<T, VkDevice>))
+    requires(std::is_same_v<ParentType, VkDevice>)
   {
     DestroyFn(m_parent, m_object, nullptr);
+  }
+
+  /**
+   * Destructor for objects where VkDevice is not the parent (e.g. VkInstance,
+   *VkDevice)
+   **/
+  ~thin_wrapper()
+    requires(!std::is_same_v<ParentType, VkDevice>)
+  {
+    DestroyFn(m_object, nullptr);
   }
 
   /**
