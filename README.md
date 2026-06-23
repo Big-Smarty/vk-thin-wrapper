@@ -1,96 +1,66 @@
-<h3 align="center">vk-thin-wrapper</h3>
+# vk-thin-wrapper
 
-  <p align="center">
-    A simple to use vulkan thin wrapper library (headeronly)
-    <br />
-  </p>
-</div>
+`vk-thin-wrapper` is an experimental, single-header C++20 helper for building thin RAII wrappers around Vulkan handles.
 
+The project lives in [`vk_thin_wrapper.hpp`](vk_thin_wrapper.hpp). It provides a small template API in the `bs::thin_wrappers` namespace for binding Vulkan create, get, and destroy functions to handle-owning wrapper types.
 
+This is not production-ready. The wrapper is intentionally thin, has sharp lifetime edges, and should be treated as a cautionary experiment rather than a complete Vulkan abstraction.
 
-<!-- TABLE OF CONTENTS -->
-<details>
-  <summary>Table of Contents</summary>
-  <ol>
-    <li>
-      <a href="#about-the-project">About The Project</a>
-      <ul>
-        <li><a href="#built-with">Built With</a></li>
-      </ul>
-    </li>
-    <li>
-      <a href="#getting-started">Getting Started</a>
-      <ul>
-        <li><a href="#prerequisites">Prerequisites</a></li>
-        <li><a href="#installation">Installation</a></li>
-      </ul>
-    </li>
-    <li><a href="#usage">Usage</a></li>
-    <li><a href="#roadmap">Roadmap</a></li>
-    <li><a href="#contributing">Contributing</a></li>
-    <li><a href="#license">License</a></li>
-    <li><a href="#contact">Contact</a></li>
-    <li><a href="#acknowledgments">Acknowledgments</a></li>
-  </ol>
-</details>
+## What It Provides
 
+- Header-only C++20 wrapper code in `vk_thin_wrapper.hpp`.
+- `bs::thin_wrappers::thin_wrapper`, a template RAII wrapper around C-style Vulkan handles.
+- `no_parent_t` for handles that do not have a parent handle, such as `VkInstance`.
+- `bs::thin_wrappers::vkTrampFn` for adapting Vulkan function pointers, including volk-loaded functions, into template arguments.
+- Basic success/error logging through `spdlog`.
 
+There are currently no build files, package files, or automated tests in this repository.
 
-<!-- ABOUT THE PROJECT -->
-## About The Project
+## Requirements
 
-vk-thin-wrapper is a simple headeronly vulkan thin raii wrapper library I've been working on for a while now.
-It might be slow.
-It might even crash your entire pc.
-But at least it isnt made in rust.
+- A C++20-capable clang or gcc toolchain.
+- Vulkan headers and loader setup appropriate for your platform.
+- [`volk`](https://github.com/zeux/volk).
+- [`spdlog`](https://github.com/gabime/spdlog).
 
-
-<!-- GETTING STARTED -->
-## Getting Started
-
-### Prerequisites
-
-This is an example of how to list things you need to use the software and how to install them.
-* Dependencies:
-  - volk
-  - spdlog
-  - clang/gcc with c++20 support
-
-<!-- USAGE EXAMPLES -->
 ## Usage
 
-Simple example:
+The intended usage is to create aliases for concrete Vulkan handle wrappers by binding the handle type, create-info type, parent type, create function, and destroy function:
 
-```c++
-using Instance_T = bs::thin_wrappers::thin_wrapper<VkInstance, VkInstanceCreateInfo, no_parent_t, 
-thin_wrappers::vkTrampFn<&vkCreateInstance>, thin_wrappers::vkTrampFn<&vkDestroyInstance>>;
+```cpp
+namespace thin_wrapper = bs::thin_wrappers;
+
+using Instance = thin_wrapper::thin_wrapper<
+    VkInstance,
+    VkInstanceCreateInfo,
+    no_parent_t,
+    thin_wrapper::vkTrampFn<&vkCreateInstance, VkResult>,
+    thin_wrapper::vkTrampFn<&vkDestroyInstance, void>>;
 ```
 
-<!-- CONTRIBUTING -->
+The wrapper stores the created Vulkan handle and, for child objects, a copy of the parent handle used for destruction. That makes parent-child lifetime ordering the caller's responsibility: parent handles must remain valid for every child wrapper that will destroy through them.
+
+The template also supports getter-style objects, such as queues, through the `get_fn` path. Objects that are queried or enumerated can be wrapped directly from an existing handle, but the wrapper does not add ownership semantics beyond the behavior encoded by the template arguments.
+
+## Caveats
+
+- Vulkan object lifetime rules are not enforced beyond the wrapper's destructor call.
+- Parent-child destruction order is not tracked.
+- Allocation callbacks are currently passed as `nullptr`.
+- Error handling is limited to logging `VkResult` values with `spdlog`; failed creation is not converted into exceptions.
+- The API is experimental and may change.
+
+Use this code only after reading the header and understanding the lifetime model.
+
 ## Contributing
 
-Contributions are what make the open source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
+Contributions, fixes, examples, and issue reports are welcome. If you have an idea for improving the wrapper, open an issue or submit a pull request.
 
-If you have a suggestion that would make this better, please fork the repo and create a pull request. You can also simply open an issue with the tag "enhancement".
-Don't forget to give the project a star! Thanks again!
-
-1. Fork the Project
-2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the Branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
-
-
-<!-- LICENSE -->
 ## License
 
-Distributed under the MIT License. See `LICENSE.txt` for more information.
+Distributed under the MIT License. See [LICENSE.md](LICENSE.md) for details.
 
-
-
-<!-- CONTACT -->
 ## Contact
 
-Discord: Big-Smarty#2123
-EMail: budaniasco@gmail.com
+- Discord: Big-Smarty#2123
+- Email: budaniasco@gmail.com
